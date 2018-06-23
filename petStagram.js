@@ -111,7 +111,7 @@ function addUser(user){
 	}
 };
 
-function modifyUser(userEmail, login_id, login_password, user_nickname, profile_pic_url, intro){
+function modifyUser(userEmail, login_id, login_password, user_nickname, profile_pic_url, intro,userBirthday){
 
 	if(localDB){
 		var userWillModified = users.find((u) => u.login_id == userEmail);
@@ -123,9 +123,13 @@ function modifyUser(userEmail, login_id, login_password, user_nickname, profile_
 		if(user_nickname)
 			userWillModified.user_nickname = user_nickname;
 		if(profile_pic_url)
-			userWillModified.profile_pic_url = profile_pic_url;
+		{	userWillModified.profile_pic_url = profile_pic_url;
+			console.log(userWillModified, profile_pic_url,"url");
+		}
 		if(intro)
 			userWillModified.intro = intro;
+        if(userBirthday)
+            userWillModified.user_birthday = userBirthday;
 	}
 	else{
 
@@ -403,6 +407,9 @@ function addCard(card){
 
 	if(localDB){
 		cards.push(card);
+		console.log(card.pet_id, 'pet_id');
+        var thePet = pets.find((p) => p.pet_id == card.pet_id);
+        thePet.card_id.push(card.card_id);
 	}
 	else{
 
@@ -872,16 +879,20 @@ app.post('/login', function (req, res) {
 
 });
 
-app.post('/register', function (req, res) {
+app.post('/register', upload.array('file',2),function (req, res) {
 
 	var user_id = user_count;
 	var login_id = req.body.email;
 
 	var login_password = SHA256(req.body.password);
 	var user_nickname = req.body.username;
-	var profile_pic_url = req.body.userProfileImage;
-	var sign_in_date = Date.now();
+	var pictures= req.files;
+	console.log(pictures,'pictures');
+	var profile_pic_url =  pictures[0].destination.substring(11,22)+"/"+pictures[0].filename;
+    var sign_in_date = Date.now();
 	var intro = req.body.userIntroduceText;
+	var user_birthday = req.body.userBirthday;
+    var pet_birthday = req.body.petBirthday;
 
 	if(debug){
 		console.log('***********************');
@@ -898,14 +909,14 @@ app.post('/register', function (req, res) {
 
 	var pet_name = req.body.petName;
 	var pet_id = pet_count;
-	var profile_pic_url = req.body.petProfileImage;
+	var dog_profile_pic_url = pictures[1].destination.substring(11,22)+"/"+pictures[0].filename;
 	var intro = req.body.petIntroduceText;
 
 	if(debug){
 		console.log('<PET>');
 		console.log('pet_id = ' + pet_id);
 		console.log('pet_name = ' + pet_name);
-		console.log('profile_pic_url = ' + profile_pic_url);
+		console.log('profile_pic_url = ' + dog_profile_pic_url);
 		console.log('intro = ' + intro);
 	}
 
@@ -922,14 +933,16 @@ app.post('/register', function (req, res) {
 				u.login_id = login_id;
 				u.login_password = login_password;
 				u.sign_in_date = sign_in_date;
-
+				u.profile_pic_url= profile_pic_url;
+				u.user_nickname = user_id;
+				u.user_birthday= user_birthday;
 				addUser(u);
 
 				var p = new pet();
 				p.pet_name = pet_name;
-				p.profile_pic_url = profile_pic_url;
+				p.profile_pic_url = dog_profile_pic_url;
 				p.intro = intro;
-
+                p.pet_birthday= pet_birthday;
 				addPet(login_id, p);
 
 				if(debug){
@@ -1030,11 +1043,11 @@ app.get('/user/:user_email', function (req, res) {
 	    			   '\"title\" : \"' + c.title + '\", ' +
 	    			   '\"text\" : \"' + c.text + '\", ' +
 	    			   '\"date\" : \"' + c.date + '\", ' +
-	    			   '\"tag_id\" : \"' + arrayToString(c.tag_id) + '\", ' +
-	    			   '\"comment_id\" : \"' + arrayToString(c.comment_id) + '\", ' +
-	    			   '\"video_id\" : \"' + arrayToString(c.video_id) + '\", ' +
-	    			   '\"picture_id\" : \"' + arrayToString(c.picture_id) + '\", ' +
-	    			   '\"pet_id\" : \"' + arrayToString(c.pet_id) + '\", ' +
+	    			   '\"tag_id\" : ' + arrayToString(c.tag_id) + ', ' +
+	    			   '\"comment_id\" : ' + arrayToString(c.comment_id) + ', ' +
+	    			   '\"video_id\" : ' + arrayToString(c.video_id) + ', ' +
+	    			   '\"picture_id\" : ' + arrayToString(c.picture_id) + ', ' +
+	    			   '\"pet_id\" : ' + c.pet_id + ', ' +
 	    			   '\"location\" : \"' + c.location + '\"},';
 
 
@@ -1046,14 +1059,13 @@ app.get('/user/:user_email', function (req, res) {
 			else{
 				cardsJson = '[]';
 			}
-
 			petsJson = petsJson + '{\"id\" : ' + p.pet_id + ', ' +
     			   '\"petName\" : \"' + p.pet_name + '\", ' +
-    			   '\"petProfileImage\" : \"' + p.profile_pic_url + '\", ' +
+    			   '\"petProfileImage\" : '+'{\"picture_url\" : \"' + p.profile_pic_url + '\"}, ' +
     			   '\"petBirthDay\" : \"' + p.pet_birthday + '\", ' +
     			   '\"introduceText\" : \"' + p.intro + '\", ' +
     			   '\"cards\" : ' + cardsJson + ', ' +
-    			   '\"owner\" : \"' + arrayToString(p.owners) + '\"},';
+    			   '\"owner\" : ' + arrayToString(p.owners) + '},';
 
 		});
 
@@ -1074,7 +1086,7 @@ app.get('/user/:user_email', function (req, res) {
 	    		'\"userProfileImage\" : \"' + u.profile_pic_url + '\", ' +
 				'\"introduceText\" : \"' + u.intro + '\", ' +
 				'\"pets\" : ' + petsJson + ', ' +
-				'\"userBirthDay\" : \"' + u.userBirthDay + '\", ' +
+				'\"userBirthDay\" : \"' + u.user_birthday + '\", ' +
 				'\"totalPost\" : ' + totalPost + ', ' +
 				'\"totalFollowing\" : ' + u.following_id.length + ', ' +
 				'\"totalFollowed\" : ' + u.followed_id.length + ', ' +
@@ -1089,7 +1101,7 @@ app.get('/user/:user_email', function (req, res) {
 	    		'\"userProfileImage\" : \"' + u.profile_pic_url + '\", ' +
 				'\"introduceText\" : \"' + u.intro + '\", ' +
 				'\"pets\" : ' + petsJson + ', ' +
-				'\"userBirthDay\" : \"' + u.userBirthDay + '\", ' +
+				'\"userBirthDay\" : \"' + u.user_birthday + '\", ' +
 				'\"totalPost\" : ' + totalPost + ', ' +
 				'\"totalFollowing\" : ' + u.following_id.length + ', ' +
 				'\"totalFollowed\" : ' + u.followed_id.length + ', ' +
@@ -1110,19 +1122,20 @@ app.get('/user/:user_email', function (req, res) {
 
 });
 
-app.put('/user/:user_email', upload.single('userProfileImage'), function (req, res) {
+app.post('/user/:user_email/edit', upload.single('userProfileImage'), function (req, res) {
 
 	var user_email = req.params.user_email;
 
 	var u = userFindByEmail(user_email);
 
 	var picture = req.file;
-
+	var userBirthday= req.body.userBirthDay;
 	if(debug){
 		console.log('***********************');
 		console.log('[/user/:user_email] PUT');
 		console.log('user_email = ' + user_email);
 		console.log('picture = ' + picture);
+		console.log('userBrithDay = ' +userBirthday);
 	}
 
 	if(u){
@@ -1130,16 +1143,16 @@ app.put('/user/:user_email', upload.single('userProfileImage'), function (req, r
 		var login_id = req.body.userEmail;
 		var login_password = req.body.password;
 		var user_nickname = req.body.username;
-		var profile_pic_url = req.body.userProfileImage;
+		var profile_pic_url = picture.destination.substring(11,22)+"/"+picture.filename;
 		var intro = req.body.introduceText;
 
-		modifyUser(user_email, login_id, login_password, user_nickname, profile_pic_url, intro);
+		modifyUser(user_email, login_id, login_password, user_nickname, profile_pic_url, intro,userBirthday);
 
 		if(debug){
 			console.log('<USER INFO MODIFIED>');
 			console.log('{\"userEmail\" : ' + login_id + ', ' +
 	    		'\"password\" : \"' + login_password + '\", ' +
-	    		'\"userProfileImage\" : \"' + user_nickname + '\", ' +
+	    		'\"userProfileImage\" : \"' + profile_pic_url + '\", ' +
 	    		'\"introduceText\" : \"' + intro + '\"}');
 			console.log('***********************');
 		}
@@ -1445,7 +1458,6 @@ app.get('/pet', function (req, res) {
 	}
 
 	var idFound = petFindById(pet_id);
-
 	if(idFound){
 
 		if(debug){
@@ -1502,7 +1514,7 @@ app.post('/pet', upload.single('petProfileImage'),function (req, res) {
 			p.owners.push(owner);
 
 			if(petProfileImage)
-				p.profile_pic_url = petProfileImage;
+				p.profile_pic_url = petProfileImage.destination.substring(11,22)+"/"+petProfileImage.filename;;
 			if(petBirthDay)
 				p.pet_birthday = petBirthDay;
 			if(introduceText)
@@ -1818,7 +1830,7 @@ app.get('/userPet/:userEmail', function (req, res) {
 							'\"id\" : ' +  p.pet_id + ', ' +
 							'\"petBirthDay\" : \"' +  p.pet_birthday + '\", ' +
 							'\"introduceText\" : \"' +  p.intro + '\", ' +
-							'\"owners\" : \"' +  arrayToString(p.owners) + '\" },'
+							'\"owners\" : ' +  arrayToString(p.owners) + ' },'
     	)
 
 		if(petFound.length > 0){
